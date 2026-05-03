@@ -4,7 +4,7 @@ import { Card, Typography } from 'antd';
 const { Title } = Typography;
 
 interface PageContainerProps {
-  title: string;
+  title: ReactNode;
   extra?: ReactNode;
   children: ReactNode;
 }
