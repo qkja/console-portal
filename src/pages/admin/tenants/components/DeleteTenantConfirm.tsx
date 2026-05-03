@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Modal, Typography, Input, message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
-import { mockDeleteTenant } from '../mockData';
+import { deleteTenant } from '@/services/tenantApi';
 import type { TenantInfo } from '@/types/tenant';
 
-const { Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface DeleteTenantConfirmProps {
   open: boolean;
@@ -19,19 +19,27 @@ export function DeleteTenantConfirm({ open, tenant, onClose, onSuccess }: Delete
 
   const handleConfirm = async () => {
     if (!tenant) return;
-    if (inputCode !== tenant.code) {
+    // 保持原有的二次确认逻辑（输入租户编码）
+    if (!tenant.code) {
+      // 如果后端没有返回 code，直接用 tenant.name 确认
+      if (inputCode !== tenant.name) {
+        message.error('输入的租户名称不正确');
+        return;
+      }
+    } else if (inputCode !== tenant.code) {
       message.error('输入的租户编码不正确');
       return;
     }
     setLoading(true);
     try {
-      await mockDeleteTenant(tenant.id);
+      // 调用后端 API 删除租户（编号 006）
+      await deleteTenant(tenant.id);
       message.success('租户已删除');
       setInputCode('');
       onSuccess();
       onClose();
     } catch {
-      message.error('删除失败，请重试');
+      // 错误已在 request 拦截器中 Toast
     } finally {
       setLoading(false);
     }
@@ -42,7 +50,8 @@ export function DeleteTenantConfirm({ open, tenant, onClose, onSuccess }: Delete
     onClose();
   };
 
-  const isCodeMatch = inputCode === tenant?.code;
+  const codeToMatch = tenant?.code || tenant?.name || '';
+  const isCodeMatch = inputCode === codeToMatch;
 
   return (
     <Modal
@@ -67,12 +76,6 @@ export function DeleteTenantConfirm({ open, tenant, onClose, onSuccess }: Delete
     >
       {tenant && (
         <>
-          <Paragraph>
-            <Text>
-              确定要删除租户「<Text strong>{tenant.name}</Text>」及其所有数据吗？
-            </Text>
-          </Paragraph>
-
           <div
             style={{
               background: '#fff2f0',
@@ -95,11 +98,11 @@ export function DeleteTenantConfirm({ open, tenant, onClose, onSuccess }: Delete
 
           <div style={{ marginTop: 16 }}>
             <Text type="secondary">
-              请输入租户编码 <Text code>{tenant.code}</Text> 确认删除：
+              请输入租户编码 <Text code>{codeToMatch}</Text> 确认删除：
             </Text>
             <Input
               style={{ marginTop: 8 }}
-              placeholder={`请输入 ${tenant.code}`}
+              placeholder={`请输入 ${codeToMatch}`}
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
               onPressEnter={() => {

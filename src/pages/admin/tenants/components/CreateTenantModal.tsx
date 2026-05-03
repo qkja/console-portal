@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { Modal, Form, Input, Checkbox, Typography, Divider, message } from 'antd';
-import { MOCK_AUTH_ITEMS, mockCreateTenant } from '../mockData';
-import type { AuthorizationItem } from '@/types/tenant';
+import { Modal, Form, Input, message } from 'antd';
+import { createTenant } from '@/services/tenantApi';
 
 const { TextArea } = Input;
-const { Text } = Typography;
 
 interface CreateTenantModalProps {
   open: boolean;
@@ -19,27 +17,25 @@ export function CreateTenantModal({ open, onClose, onSuccess }: CreateTenantModa
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const authIds: number[] = values.authorizationIds || [];
-      if (authIds.length === 0) {
-        message.warning('请至少勾选一项授权');
-        return;
-      }
       setLoading(true);
-      await mockCreateTenant({
+      // 调用后端 API 创建租户
+      await createTenant({
         name: values.name,
-        code: values.code,
         contactName: values.contactName,
         contactPhone: values.contactPhone,
-        contactEmail: values.contactEmail || undefined,
-        description: values.description || undefined,
-        authorizationIds: authIds,
       });
       message.success('租户创建成功');
       form.resetFields();
       onSuccess();
       onClose();
-    } catch {
-      // validation error, handled by form
+    } catch (err: unknown) {
+      // validation error (no catch message), or API error
+      if (err instanceof Error) {
+        // API 错误已在 request 拦截器中 Toast，这里只做 fallback
+        if (!err.message) {
+          message.error('创建租户失败');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -73,17 +69,6 @@ export function CreateTenantModal({ open, onClose, onSuccess }: CreateTenantModa
           ]}
         >
           <Input placeholder="请输入租户名称" maxLength={50} />
-        </Form.Item>
-
-        <Form.Item
-          name="code"
-          label="租户编码"
-          rules={[
-            { required: true, message: '请输入租户编码' },
-            { pattern: /^[a-zA-Z0-9_]{3,32}$/, message: '3~32 位字母数字组合' },
-          ]}
-        >
-          <Input placeholder="请输入租户编码（字母数字组合）" maxLength={32} />
         </Form.Item>
 
         <Form.Item
@@ -122,48 +107,6 @@ export function CreateTenantModal({ open, onClose, onSuccess }: CreateTenantModa
           rules={[{ max: 500, message: '描述不超过 500 个字符' }]}
         >
           <TextArea placeholder="请输入租户描述（选填）" rows={2} maxLength={500} showCount />
-        </Form.Item>
-
-        <Divider orientation="left" plain>
-          <Text type="secondary">授权配置</Text>
-        </Divider>
-
-        {/* 授权配置 */}
-        <Form.Item
-          name="authorizationIds"
-          label="授权项"
-          rules={[
-            {
-              validator: (_, value) => {
-                if (!value || value.length === 0) {
-                  return Promise.reject(new Error('至少勾选一项授权'));
-                }
-                return Promise.resolve();
-              },
-            },
-          ]}
-        >
-          <Checkbox.Group style={{ width: '100%' }}>
-            {MOCK_AUTH_ITEMS.map((item: AuthorizationItem) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '8px 0',
-                  borderBottom: '1px solid #f0f0f0',
-                }}
-              >
-                <Checkbox value={item.id} />
-                <div style={{ marginLeft: 8 }}>
-                  <div style={{ fontWeight: 500 }}>{item.name}</div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.description}
-                  </Text>
-                </div>
-              </div>
-            ))}
-          </Checkbox.Group>
         </Form.Item>
       </Form>
     </Modal>

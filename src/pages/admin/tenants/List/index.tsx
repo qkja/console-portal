@@ -7,7 +7,7 @@ import { PageContainer, SearchBar, StatusBadge, EmptyState } from '@/components'
 import type { SearchField } from '@/components';
 import { maskPhone, formatDateTime } from '@/utils/format';
 import { AUTH_STATUS_LABELS, AUTH_STATUS_COLORS, DEFAULT_PAGE_SIZE } from '@/utils/constants';
-import { mockGetTenantList } from '../mockData';
+import { listTenants } from '@/services/tenantApi';
 import type { TenantInfo } from '@/types/tenant';
 
 import { CreateTenantModal } from '../components/CreateTenantModal';
@@ -31,22 +31,34 @@ export default function TenantListPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingTenant, setDeletingTenant] = useState<TenantInfo | null>(null);
 
-  /** 加载列表数据 */
+  /** 加载列表数据 — 调用后端 API */
   const fetchData = useCallback(
     async (p: number, ps: number, search: Record<string, string>) => {
       setLoading(true);
       try {
-        const result = await mockGetTenantList({
+        // 搜索值映射：前端 authStatus → 后端 status（0=已授权, 1=未授权）
+        let statusFilter: number | undefined;
+        const authStatus = search.authStatus || 'all';
+        if (authStatus === 'enabled') {
+          statusFilter = 0;
+        } else if (authStatus === 'disabled') {
+          statusFilter = 1;
+        } else {
+          statusFilter = -1; // 全部不过滤
+        }
+
+        const result = await listTenants({
           page: p,
           pageSize: ps,
-          search: search.search || '',
-          status: search.authStatus || 'all',
+          keyword: search.search || '',
+          status: statusFilter,
         });
         setTenants(result.items);
         setTotal(result.total);
         setPage(result.page);
-      } catch {
-        message.error('加载租户列表失败');
+      } catch (err: unknown) {
+        // 错误已在 request 拦截器中 Toast，这里不重复提示
+        console.error('加载租户列表失败:', err);
       } finally {
         setLoading(false);
       }
@@ -91,7 +103,7 @@ export default function TenantListPage() {
       name: 'search',
       label: '搜索',
       type: 'input',
-      placeholder: '租户名称/编码',
+      placeholder: '租户名称',
     },
     {
       name: 'authStatus',
@@ -101,7 +113,6 @@ export default function TenantListPage() {
       options: [
         { label: '全部', value: 'all' },
         { label: '已开通', value: 'enabled' },
-        { label: '部分开通', value: 'partial' },
         { label: '未开通', value: 'disabled' },
       ],
     },
@@ -113,12 +124,6 @@ export default function TenantListPage() {
       dataIndex: 'name',
       key: 'name',
       width: 180,
-    },
-    {
-      title: '租户编码',
-      dataIndex: 'code',
-      key: 'code',
-      width: 140,
     },
     {
       title: '联系人',
@@ -223,7 +228,7 @@ export default function TenantListPage() {
           onChange: (p, ps) =>
             handleTableChange({ current: p, pageSize: ps } as TablePaginationConfig),
         }}
-        scroll={{ x: 1100 }}
+        scroll={{ x: 1000 }}
         locale={{
           emptyText: <EmptyState description="暂无租户数据" />,
         }}

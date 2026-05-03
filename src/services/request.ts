@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { message as antMessage } from 'antd';
 import { getToken, clearToken } from '@/utils/token';
 
 const request = axios.create({
@@ -7,12 +8,15 @@ const request = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// 请求拦截器：注入 Token
+// 请求拦截器：注入 Token 和 mock 用户租户头
 request.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // 注入 mock 用户和租户信息
+  config.headers['X-User-Id'] = import.meta.env.VITE_USER_ID || 'admin';
+  config.headers['X-Tenant-Id'] = import.meta.env.VITE_TENANT_ID || 'default';
   return config;
 });
 
@@ -27,6 +31,8 @@ request.interceptors.response.use(
     }
     // 统一错误格式：提取后端返回的 message
     const message = error.response?.data?.message || error.message || '请求失败';
+    // 非 2xx 时 Toast 错误信息
+    antMessage.error(message);
     return Promise.reject(new Error(message));
   },
 );

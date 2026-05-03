@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Modal, Form, Input, Checkbox, Typography, Divider, message, Alert } from 'antd';
-import { MOCK_AUTH_ITEMS, mockUpdateTenant, mockUpdateAuthorizations, mockGetAuthorizations } from '../mockData';
-import type { AuthorizationItem, TenantInfo } from '@/types/tenant';
+import { Modal, Form, Input, Typography, message } from 'antd';
+import { updateTenant } from '@/services/tenantApi';
+import type { TenantInfo } from '@/types/tenant';
 
 const { Text } = Typography;
 
@@ -15,19 +15,13 @@ interface EditAuthModalProps {
 export function EditAuthModal({ open, tenant, onClose, onSuccess }: EditAuthModalProps) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [authItems, setAuthItems] = useState<AuthorizationItem[]>([]);
 
   useEffect(() => {
     if (open && tenant) {
-      // 用 mockGetAuthorizations 获取当前最新授权状态（含运行时变更）
-      mockGetAuthorizations(tenant.id).then((tenantAuths) => {
-        setAuthItems(tenantAuths);
-        form.setFieldsValue({
-          contactName: tenant.contactName,
-          contactPhone: tenant.contactPhone,
-          contactEmail: tenant.contactEmail || '',
-          authorizationIds: tenantAuths.filter((a) => a.enabled).map((a) => a.id),
-        });
+      form.setFieldsValue({
+        contactName: tenant.contactName,
+        contactPhone: tenant.contactPhone,
+        contactEmail: tenant.contactEmail || '',
       });
     }
   }, [open, tenant, form]);
@@ -36,25 +30,21 @@ export function EditAuthModal({ open, tenant, onClose, onSuccess }: EditAuthModa
     if (!tenant) return;
     try {
       const values = await form.validateFields();
-      const authIds: number[] = values.authorizationIds || [];
-      if (authIds.length === 0) {
-        message.warning('至少勾选一项授权');
-        return;
-      }
       setLoading(true);
-      // 更新基础信息
-      await mockUpdateTenant(tenant.id, {
+      // 调用后端 API 更新租户信息（编号 005）
+      await updateTenant(tenant.id, {
         contactName: values.contactName,
         contactPhone: values.contactPhone,
-        contactEmail: values.contactEmail || undefined,
       });
-      // 更新授权
-      await mockUpdateAuthorizations(tenant.id, authIds);
       message.success('授权已更新');
       onSuccess();
       onClose();
-    } catch {
-      // validation error
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        if (!err.message) {
+          message.error('编辑授权失败');
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -94,10 +84,6 @@ export function EditAuthModal({ open, tenant, onClose, onSuccess }: EditAuthModa
               <Text type="secondary">租户名称：</Text>
               <Text strong>{tenant.name}</Text>
             </div>
-            <div>
-              <Text type="secondary">租户编码：</Text>
-              <Text strong>{tenant.code}</Text>
-            </div>
           </div>
 
           {/* 可编辑字段 */}
@@ -129,54 +115,6 @@ export function EditAuthModal({ open, tenant, onClose, onSuccess }: EditAuthModa
             rules={[{ type: 'email', message: '请输入正确的邮箱格式' }]}
           >
             <Input placeholder="请输入联系邮箱（选填）" />
-          </Form.Item>
-
-          <Divider orientation="left" plain>
-            <Text type="secondary">授权配置</Text>
-          </Divider>
-
-          <Alert
-            message="变更授权会影响该租户下所有用户的系统权限"
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-
-          <Form.Item
-            name="authorizationIds"
-            label="授权项"
-            rules={[
-              {
-                validator: (_, value) => {
-                  if (!value || value.length === 0) {
-                    return Promise.reject(new Error('至少勾选一项授权'));
-                  }
-                  return Promise.resolve();
-                },
-              },
-            ]}
-          >
-            <Checkbox.Group style={{ width: '100%' }}>
-              {authItems.map((item: AuthorizationItem) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '8px 0',
-                    borderBottom: '1px solid #f0f0f0',
-                  }}
-                >
-                  <Checkbox value={item.id} />
-                  <div style={{ marginLeft: 8 }}>
-                    <div style={{ fontWeight: 500 }}>{item.name}</div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {item.description}
-                    </Text>
-                  </div>
-                </div>
-              ))}
-            </Checkbox.Group>
           </Form.Item>
         </Form>
       )}

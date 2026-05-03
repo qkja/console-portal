@@ -4,23 +4,17 @@ import {
   Card,
   Descriptions,
   Typography,
-  Tag,
   Button,
   Space,
   Spin,
   Empty,
   message,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { PageContainer } from '@/components';
-import { maskPhone, formatDateTime, formatDate } from '@/utils/format';
-import {
-  mockGetTenantDetail,
-  mockGetAuthorizations,
-  mockGetDirectoryOverview,
-} from '../mockData';
+import { maskPhone, formatDateTime } from '@/utils/format';
+import { getTenantDetail } from '@/services/tenantApi';
 import type { TenantInfo, AuthorizationItem } from '@/types/tenant';
-import type { DirectoryOverview } from '../mockData';
 
 const { Text } = Typography;
 
@@ -31,17 +25,13 @@ export default function TenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [auths, setAuths] = useState<AuthorizationItem[]>([]);
-  const [directories, setDirectories] = useState<DirectoryOverview[]>([]);
 
   useEffect(() => {
     if (!id) return;
-    const tenantId = Number(id);
     setLoading(true);
-    Promise.all([
-      mockGetTenantDetail(tenantId),
-      mockGetAuthorizations(tenantId),
-    ])
-      .then(([tenantDetail, authList]) => {
+    // 调用后端 API 获取租户详情（编号 007）
+    getTenantDetail(id)
+      .then(({ tenant: tenantDetail, auths: authList }) => {
         if (!tenantDetail) {
           message.error('租户不存在');
           navigate('/admin/tenants');
@@ -49,10 +39,9 @@ export default function TenantDetailPage() {
         }
         setTenant(tenantDetail);
         setAuths(authList);
-        setDirectories(mockGetDirectoryOverview(tenantId));
       })
       .catch(() => {
-        message.error('加载租户详情失败');
+        // 错误已在 request 拦截器中 Toast
       })
       .finally(() => {
         setLoading(false);
@@ -97,38 +86,19 @@ export default function TenantDetailPage() {
       >
         <Descriptions column={2} bordered size="small">
           <Descriptions.Item label="租户名称">{tenant.name}</Descriptions.Item>
-          <Descriptions.Item label="租户编码">
-            <Text code>{tenant.code}</Text>
-          </Descriptions.Item>
           <Descriptions.Item label="联系人">{tenant.contactName}</Descriptions.Item>
           <Descriptions.Item label="联系电话">
-            {maskPhone(tenant.contactPhone)}
-          </Descriptions.Item>
-          <Descriptions.Item label="联系邮箱">
-            {tenant.contactEmail || '-'}
+            {maskPhone(tenant.contactPhone || '')}
           </Descriptions.Item>
           <Descriptions.Item label="创建时间">
             {formatDateTime(tenant.createdAt)}
           </Descriptions.Item>
-          <Descriptions.Item label="租户描述" span={2}>
-            {tenant.description || '-'}
-          </Descriptions.Item>
         </Descriptions>
       </Card>
 
-      {/* 授权详情 */}
+      {/* 授权详情（编号 009 — 后端不返回授权字段时默认「已开通」） */}
       <Card
         title={<Text strong>授权详情</Text>}
-        extra={
-          <Button
-            type="primary"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/admin/tenants?id=${tenant.id}`)}
-          >
-            编辑授权
-          </Button>
-        }
         style={{ marginBottom: 16 }}
       >
         {auths.length === 0 ? (
@@ -146,11 +116,6 @@ export default function TenantDetailPage() {
               }}
             >
               <Space>
-                {auth.enabled ? (
-                  <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} />
-                ) : (
-                  <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 18 }} />
-                )}
                 <div>
                   <Text strong>{auth.name}</Text>
                   <br />
@@ -159,59 +124,12 @@ export default function TenantDetailPage() {
                   </Text>
                 </div>
               </Space>
-              <Text
-                style={{
-                  color: auth.enabled ? '#52c41a' : '#d9d9d9',
-                  fontSize: 12,
-                }}
-              >
-                {auth.enabled ? `开通时间：${formatDate(auth.enabledAt!)}` : '未开通'}
+              <Text style={{ color: auth.enabled ? '#52c41a' : '#d9d9d9', fontSize: 12 }}>
+                {auth.enabled ? '已开通' : '未开通'}
               </Text>
             </div>
           ))
         )}
-        <div style={{ marginTop: 12 }}>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/admin/tenants?id=${tenant.id}`)}
-          >
-            编辑授权
-          </Button>
-        </div>
-      </Card>
-
-      {/* 目录概览 */}
-      <Card title={<Text strong>目录概览</Text>}>
-        {directories.length === 0 ? (
-          <Empty description="暂无目录" />
-        ) : (
-          directories.map((dir, index) => (
-            <div
-              key={index}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 0',
-                borderBottom: '1px solid #f0f0f0',
-              }}
-            >
-              <Space>
-                <Text strong>{dir.name}</Text>
-                {dir.isDefault && (
-                  <Tag color="blue" style={{ marginLeft: 4 }}>
-                    默认
-                  </Tag>
-                )}
-              </Space>
-              <Text type="secondary">用户数：{dir.userCount}</Text>
-            </div>
-          ))
-        )}
-        <Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
-          （后续可扩展：企微、钉钉、飞书等目录）
-        </Text>
       </Card>
 
       {/* 返回按钮 */}
